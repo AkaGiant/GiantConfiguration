@@ -35,14 +35,24 @@ public class Config {
 	public Config(Plugin plugin, String configPath) {
 		this.plugin = plugin;
 		this.pluginName = plugin.getName();
-
 		this.filePath = Path.of(plugin.getDataFolder().getAbsolutePath(), configPath);
 
 		saveDefault(configPath);
+	}
 
+	private Config(Plugin plugin, Path path) {
+		this.plugin = plugin;
+		this.pluginName = plugin.getName();
+		this.filePath = path;
+		this.configurationFile = YamlConfiguration.loadConfiguration(this.filePath.toFile().getAbsoluteFile());
 	}
 
 	private void saveDefault(String configPath) {
+		if (Files.exists(filePath)) {
+			this.configurationFile = YamlConfiguration.loadConfiguration(this.filePath.toFile().getAbsoluteFile());
+			return;
+		}
+
 		if (plugin.getResource(configPath) == null) {
 
 			try {
@@ -57,13 +67,14 @@ public class Config {
 				log(this.pluginName, e.toString());
 			}
 
+			this.configurationFile = YamlConfiguration.loadConfiguration(this.filePath.toFile().getAbsoluteFile());
 
 			try {
-				this.configurationFile = YamlConfiguration.loadConfiguration(this.filePath.toFile().getAbsoluteFile());
 				this.configurationFile.save(filePath.toFile());
 			} catch (IOException e) {
 				log(this.pluginName, e.toString());
 			}
+
 		} else {
 			plugin.saveResource(configPath, false);
 			this.configurationFile = YamlConfiguration.loadConfiguration(this.filePath.toFile().getAbsoluteFile());
@@ -396,16 +407,8 @@ public class Config {
 		}
 	}
 
-	private static void log(String pluginName, String message) {
-		Bukkit.getConsoleSender().sendMessage(
-			ChatColor.translateAlternateColorCodes('&', "&8[&c" + pluginName + " &c&lSEVERE&8] &f" + message)
-		);
-	}
-
 	public static Config get(Plugin plugin, String fileName) {
-		Path path = Path.of(plugin.getDataFolder().toURI());
-
-		List<Config> configs = getAll(plugin, path);
+		List<Config> configs = getAll(plugin);
 		for (Config config : configs) {
 			if (config.getFileName().equals(fileName)) return config;
 		}
@@ -413,17 +416,41 @@ public class Config {
 		return null;
 	}
 
-	public static List<Config> getAll(Plugin plugin, Path path) {
-		List<Config> configs = new ArrayList<>();
+	public static List<Config> getAll(Plugin plugin) {
+		List<Path> pathList = getAllPaths(plugin.getName(), Path.of(plugin.getDataFolder().toURI()));
 
-		try {
-			Stream<Path> files = Files.list(path);
-			files.forEach(file -> configs.add(new Config(plugin, file.getFileName().toString())));
-			files.close();
-		} catch (IOException e) {
-			log(plugin.getName(), e.toString());
+		List<Config> configs = new ArrayList<>();
+		for (Path path : pathList) {
+			if (Files.isDirectory(path)) continue;
+			configs.add(new Config(plugin, path));
 		}
 
 		return configs;
+	}
+
+	private static List<Path> getAllPaths(String pluginName, Path path) {
+		List<Path> results = new ArrayList<>();
+
+		try {
+			Stream<Path> paths = Files.list(path);
+			paths.forEach(path2 -> {
+				if (Files.isDirectory(path2)) {
+					results.addAll(getAllPaths(pluginName, path2));
+				} else {
+					results.add(path2);
+				}
+			});
+			paths.close();
+		} catch (IOException e) {
+			log(pluginName, e.toString());
+		}
+
+		return results;
+	}
+
+	private static void log(String pluginName, String message) {
+		Bukkit.getConsoleSender().sendMessage(
+			ChatColor.translateAlternateColorCodes('&', "&8[&c" + pluginName + " &c&lSEVERE&8] &f" + message)
+		);
 	}
 }
