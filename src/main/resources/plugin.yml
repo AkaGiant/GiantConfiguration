@@ -1,4 +1,0 @@
-name: GiantConfiguration
-version: '${project.version}'
-main: com.github.akagiant.giantconfiguration.GiantConfiguration
-api-version: '1.20'
